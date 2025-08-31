@@ -1,0 +1,57 @@
+{
+  "name": "main-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "prettier": "@npm-questionpro/wick-ui-prettier-config",
+  "scripts": {
+    "dev": "vite",
+    "start:dev": "NODE_ENV=development vite",
+    "start:mock_dev": "NODE_ENV=development vite --mode mock",
+    "build": "NODE_ENV=production tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "format": "prettier --write .",
+    "format:ci": "prettier --check .",
+    "lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings=0",
+    "test": "vitest",
+    "test:ci": "vitest --coverage --watch=false"
+  },
+  "dependencies": {
+    "@npm-questionpro/wick-ui-icon": "^8.0.0",
+    "@npm-questionpro/wick-ui-lib": "^1.5.2",
+    "@tanstack/react-query": "^5.85.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@npm-questionpro/wick-ui-eslint-config-frontend": "^0.0.3",
+    "@npm-questionpro/wick-ui-prettier-config": "^1.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.34.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "jsdom": "^26.1.0",
+    "msw": "^2.11.0",
+    "prettier": "^3.6.2",
+    "resize-observer-polyfill": "^1.5.1",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.41.0",
+    "vite": "^5.4.2",
+    "vitest": "^3.2.4"
+  },
+  "msw": {
+    "workerDirectory": [
+      ""
+    ]
+  }
+}

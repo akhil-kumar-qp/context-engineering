@@ -1,0 +1,723 @@
+4. Set up Prettier and ESLint
+Linting
+https://www.npmjs.com/package/@npm-questionpro/wick-ui-eslint-config-frontend
+
+Install ESLint packages
+// Install ESlint packages
+npm i -D @npm-questionpro/wick-ui-eslint-config-frontend eslint typescript-eslint
+
+Replace the entire content of “eslint.config.js” with the code below
+import wickUiEslintConfig from '@npm-questionpro/wick-ui-eslint-config-frontend'
+import tsEslint from 'typescript-eslint'
+
+export default tsEslint.config(...wickUiEslintConfig)
+Formatting
+https://www.npmjs.com/package/@npm-questionpro/wick-ui-prettier-config
+Install packages
+npm i -D @npm-questionpro/wick-ui-prettier-config
+npm i -D prettier
+
+Add below as a root-level property in “package.json”
+"prettier": "@npm-questionpro/wick-ui-prettier-config" 
+5. Enable Linting and Formatting Scripts
+Add the below commands to the package.json “scripts”:
+"format": "prettier --write .",
+"format:ci": "prettier --check .",
+"lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings=0"
+Verify that commands are running properly
+Add the below code in “App.tsx” and run “npm run lint:ci”
+
+// 1. ADD below code in App.tsx
+
+const x = () => {}
+console.log(x)
+// 2. run the following command
+npm run lint:ci
+
+// 3. you should see following output
+> main-app@0.0.0 lint:ci
+> tsc --build --noEmit && eslint . --report-unused-disable-directives --max-warnings 0
+
+
+/Volumes/workspace/react-nest-learn/frontends/main-app/src/App.tsx
+  5:16  error  Missing return type on function  @typescript-eslint/explicit-function-return-type
+
+✖ 1 problem (1 error, 0 warnings)
+6. Setting Up Wick UI
+Install the WICK UI library
+https://wick-ui-lib.pages.dev/?path=/docs/docs-gettingstarted--docs#installation
+npm install @npm-questionpro/wick-ui-lib@latest 
+@npm-questionpro/wick-ui-icon@latest
+Import Wick UI CSS files
+
+// Add the below code at the top of main.tsx file
+import '@npm-questionpro/wick-ui-icon/dist/wu-icon.css'
+import '@npm-questionpro/wick-ui-lib/dist/style.css'
+Verify by importing a Wick UI component
+// Add the below code to the App.tsx file and verify navbar is show
+
+// IMPORT the component
+import {WuPrimaryNavbar} from '@npm-questionpro/wick-ui-lib'
+
+export const App: React.FC = () => {
+  return (
+    <>
+      <TodoListScreen />
+      <WuPrimaryNavbar	
+        Links={[
+          <a key="home" href="#" className="active">
+            Home
+          </a>,
+          <a key="about" href="#">
+            About
+          </a>,
+          <a key="services" href="#">
+            Services
+          </a>,
+          <a key="contact" href="#">
+            Contact
+          </a>,
+        ]}
+      />
+    </>
+  )
+}
+7. Setting up MSW
+Create appConstants.ts
+
+
+// file path: src/constants/appConstants.ts
+export const IS_TEST_ENV = import.meta.env.MODE === 'test'
+export const IS_DEV_ENV = import.meta.env.MODE === 'development'
+export const API_BASE_URL = ''
+export const IS_MOCK_ENV = import.meta.env.MODE === 'mock'
+Update the scripts in package.json to use Mock ENV variable
+
+ "scripts": {
+   
+    "start:dev": "NODE_ENV=development vite",
+    "start:mock_dev": "NODE_ENV=development vite --mode mock",
+    "build": "NODE_ENV=production tsc -b && vite build",
+Start the server using start:mock_dev command
+
+npm run start:mock_dev
+
+Install MSW
+npm install msw@latest --save-dev
+Generate the worker script
+npx msw init ./ --save
+Setup worker
+Create IUser.ts in src/types/IUser.ts file
+
+// file path: src/types/IUser.ts
+export interface IUser {
+  id: number
+  name: string
+  email: string
+}
+Create IServerResponse.ts in src/types/IServerResponse.ts
+
+// file path: src/types/IServerResponse.ts
+export interface IServerResponse<T> {
+  data: T
+  message?: string
+}
+
+Create 	 in src/msw/mockDbs/userMockDb.ts
+	
+// file path: src/msw/mockDbs/userMockDb.ts
+import type {IUser} from '../../types/IUser'
+
+export const userMockDb = {
+  getUser: (): IUser => {
+    return {
+      id: 1,
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+    }
+  },
+}
+
+
+Create mswDevHandlers.ts in src/msw/handlers/mswDevHandlers.ts file
+
+
+// file path: src/msw/handlers/mswDevHandlers.ts
+import {HttpResponse, http} from 'msw'
+import {userMockDb} from '../mockDbs/userMockDb'
+import {API_BASE_URL} from '../../constants/appConstants'
+import type {IUser} from '../../types/IUser'
+
+const sendResponse = <T>(res: T): HttpResponse<{data: T}> => {
+  return HttpResponse.json({data: res})
+}
+
+export const mswDevHandlers = [
+  http.get(`${API_BASE_URL}user`, () => {
+    const user = userMockDb.getUser()
+    return sendResponse<IUser>(user)
+  }),
+]
+Create mswDevServer.ts in src/msw/mswDevServer.ts file
+
+// file path: src/msw/mswDevServer.ts
+import {setupWorker} from 'msw/browser'
+import {mswDevHandlers} from './handlers/mswDevHandlers'
+	
+export const mswDevServer = setupWorker(...mswDevHandlers)
+Conditionally enable mocking in src/main.tsx
+
+import {App} from './App.tsx'
+import {IS_MOCK_ENV} from './constants/appConstants.ts'
+import React from 'react'
+import ReactDom from 'react-dom/client'
+import '@npm-questionpro/wick-ui-icon/dist/wu-icon.css'
+import '@npm-questionpro/wick-ui-lib/dist/style.css'
+import './index.css'
+
+async function enableMocking(): Promise<void> {
+  if (!IS_MOCK_ENV) {
+    return
+  }
+
+  const {mswDevServer} = await import('./msw/mswDevServer')
+  const serviceWorkerUrl = `${import.meta.env.BASE_URL}mockServiceWorker.js`
+  console.log(serviceWorkerUrl)
+
+  // `worker.start()` returns a Promise that resolves
+  // once the Service Worker is up and ready to intercept requests.
+  await mswDevServer.start({
+    serviceWorker: {
+      url: serviceWorkerUrl,
+      options: {
+        scope: '',
+      },
+    },
+  })
+}
+
+enableMocking()
+  .then(() => {
+    ReactDom.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>,
+    )
+  })
+  .catch(err => console.error(err))
+
+Call user api to fetch user in src/App.tsx
+
+import {WuPrimaryNavbar} from '@npm-questionpro/wick-ui-lib'
+import './App.css'
+import {TodoListScreen} from './screens/TodoListScreen'
+import {API_BASE_URL} from './constants/appConstants'
+import type {IServerResponse} from './types/IServerResponse'
+import type {IUser} from './types/IUser'
+import {useEffect, useState} from 'react'
+
+const fetchUser = async (): Promise<IServerResponse<IUser>> => {
+  return fetch(`${API_BASE_URL}user`, {
+    method: 'GET',
+    headers: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      'Content-Type': 'application/json',
+    },
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok')
+    }
+    return response.json() as Promise<IServerResponse<IUser>>
+  })
+}
+
+export const App: React.FC = () => {
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<IUser | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchUser()
+      .then(res => {
+        setUser(res.data)
+      })
+      .catch(err => {
+        setError(err.message)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [])
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>
+  }
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  return (
+    <>
+      <div>
+        <WuPrimaryNavbar
+          Links={[
+            <a key="home" href="#" className="active">
+              Home
+            </a>,
+            <a key="about" href="#">
+              About
+            </a>,
+            <a key="services" href="#">
+              Services
+            </a>,
+            <a key="contact" href="#">
+              Contact
+            </a>,
+          ]}
+        />
+        <TodoListScreen />
+      </div>
+      <h1>{user?.email}</h1>
+    </>
+  )
+}
+8. Set up Tests (Vitest + Testing-Library)
+Install Vitest
+
+npm install -D vitest 
+npm install --save-dev @testing-library/jest-dom    
+Install Testing Library
+
+npm install --save-dev @testing-library/react @testing-library/dom @types/react @types/react-dom resize-observer-polyfill jsdom
+
+Create setupTests.ts file in “src/tests/setupTests.ts” for global tests setup and cleanup.
+
+// file path: src/tests/setupTests.ts
+import {afterEach} from 'vitest'
+import {cleanup} from '@testing-library/react'
+import * as ResizeObserverModule from 'resize-observer-polyfill'
+
+import '@testing-library/dom'
+import {mswTestServer} from '../msw/mswTestServer'
+import '@testing-library/jest-dom'
+
+beforeAll(() => {
+  // https://stackoverflow.com/a/72543616/8596140
+  // This is required by wick-ui-lib WuModal component
+  window.ResizeObserver = ResizeObserverModule.default
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+  mswTestServer.listen()
+})
+
+beforeEach(() => {})
+
+afterEach(() => {
+  // Reset all request handlers
+  mswTestServer.resetHandlers()
+  cleanup()
+})
+
+afterAll(() => {
+  mswTestServer.close()
+})
+
+
+
+Create “src/providers/AppProviders.tsx” file (we wil use it later in the React-Query section)
+
+// file path: src/providers/AppProviders.tsx
+import React from 'react'
+
+export const AppProviders: React.FC<React.PropsWithChildren> = ({children}) => {
+  // Create a client using ref to avoid re-creating it on every render
+  return <>{children}</>
+}
+
+Use AppProviders in the main.tsx file.
+
+      <React.StrictMode>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </React.StrictMode>,
+
+Create src/tests/testUtil.ts  file
+
+// file path: src/tests/testUtil.ts
+import {
+  render,
+  screen,
+  waitForElementToBeRemoved,
+  type RenderResult,
+} from '@testing-library/react'
+import {AppProviders} from '../providers/AppProviders'
+import type {ReactElement} from 'react'
+
+const GLOBAL_ROUTE_PREFIX = ''
+
+export const testUtil = {
+  waitForLoadingToFinish: (): Promise<void> =>
+    waitForElementToBeRemoved(
+      () => [
+        ...screen.queryAllByTestId('spinner'),
+        ...screen.queryAllByLabelText(/loading/i),
+        ...screen.queryAllByText(/loading/i),
+      ],
+      {timeout: 10000},
+    ),
+  renderWithRoute: async function renderWithRoute(
+    ui: ReactElement,
+    {
+      route = '/',
+
+      ...renderOptions
+    }: {route?: string; rest?: unknown[]} = {},
+    waitForLoadingToFinish = true,
+  ): Promise<RenderResult> {
+    // remove the leading slash
+    route = route.replace(/^\//, '')
+    window.history.pushState({}, 'Test page', `/${GLOBAL_ROUTE_PREFIX}${route}`)
+    const returnValue = {
+      ...render(ui, {
+        wrapper: AppProviders,
+        ...renderOptions,
+      }),
+    }
+
+    if (waitForLoadingToFinish) await testUtil.waitForLoadingToFinish()
+
+    return returnValue
+  },
+} as const
+
+
+Create a separate MSW server for tests in src/msw/mswTestServer.ts
+
+// file path: frontend/main-app/src/msw/mswTestServer.ts
+import {setupServer} from 'msw/node'
+import {mswDevHandlers} from './handlers/mswDevHandlers'
+
+export const mswTestServer = setupServer(...[...mswDevHandlers])
+
+export * from 'msw'
+
+Configure vitest in vite.config.ts
+
+/// <reference types="vitest/config" />
+/* You'll also need to add a reference to Vitest types using a triple
+slash directive at the top of your config file. */
+import {defineConfig} from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/tests/setupTests.ts',
+    testTimeout: 10_000,
+    coverage: {
+      exclude: [
+        'mockServiceWorker.js',
+        '.eslintrc.cjs',
+        'src/main.tsx',
+        'src/mswServer',
+        '**/*.config.js',
+        '**/types/*.ts',
+        'src/msw',
+        '_tests_',
+        'vite.config.ts',
+      ],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
+    },
+  },
+})
+
+Configure VS Code type completions by adding the below property under “compilerOptions” in “tsconfig.app.json”
+
+{
+  "compilerOptions": {
+	...
+"types": ["vitest/globals", "@testing-library/dom"]
+  },
+
+  "include": ["src", "tests"] // also add "tests" to the include
+}
+
+Add test commands in “package.json” “scripts” section
+
+"test": "vitest",
+"test:ci": "vitest --coverage --watch=false"
+Create test file: src/screens/__tests__/TodoListScreen.test.tsx
+
+// file path: src/screens/__tests__/TodoListScreen.test.tsx
+import {screen} from '@testing-library/dom'
+import {App} from '../../App'
+import {testUtil} from '../../tests/testUtil'
+
+describe('TodoListScreen', () => {
+  test('should render correctly', async () => {
+    await testUtil.renderWithRoute(<App />, {route: '/'})
+
+    await screen.findByText(/example/i)
+  })
+})
+Run tests
+
+npm run test
+Install @testing-library/user-event package testing user interactions
+
+
+npm i -D @testing-library/user-event
+
+9. Set Up React Query
+Install react-query
+
+npm i @tanstack/react-query
+Add QueryClientProvider to providers/AppProvider.tsx
+
+// file path: src/providers/AppProviders.tsx
+
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import React from 'react'
+
+export const AppProviders: React.FC<React.PropsWithChildren> = ({children}) => {
+  // Create a client using ref to avoid re-creating it on every render
+  const queryClientRef = React.useRef<QueryClient | null>(null)
+  if (!queryClientRef.current) {
+    queryClientRef.current = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+  }
+
+  return (
+    <QueryClientProvider client={queryClientRef.current}>
+      {children}
+    </QueryClientProvider>
+  )
+}
+Wrap <App/> with <AppProvider>. Add the following code in main.tsx file
+
+enableMocking()
+  .then(() => {
+    ReactDom.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </React.StrictMode>,
+    )
+  })
+  .catch(err => console.error(err))
+
+Replace the App.tsx code to use React-Query
+
+import {WuPrimaryNavbar} from '@npm-questionpro/wick-ui-lib'
+import './App.css'
+import {TodoListScreen} from './screens/TodoListScreen'
+import {API_BASE_URL} from './constants/appConstants'
+import type {IServerResponse} from './types/IServerResponse'
+import type {IUser} from './types/IUser'
+import {useQuery, type UseQueryResult} from '@tanstack/react-query'
+
+const fetchUser = async (): Promise<IServerResponse<IUser>> => {
+  return fetch(`${API_BASE_URL}user`, {
+    method: 'GET',
+    headers: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      'Content-Type': 'application/json',
+    },
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok')
+    }
+    return response.json() as Promise<IServerResponse<IUser>>
+  })
+}
+
+const useUserApi = (): UseQueryResult<IServerResponse<IUser>, Error> => {
+  return useQuery({
+    queryKey: ['user'],
+    queryFn: fetchUser,
+  })
+}
+
+export const App: React.FC = () => {
+  const {data, error, isLoading} = useUserApi()
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  if (error) {
+    console.error('Error fetching user:', error)
+    return <div>Error: {error?.message || 'Something went wrong'}</div>
+  }
+  const user = data?.data
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  return (
+    <>
+      <div>
+        <WuPrimaryNavbar
+          Links={[
+            <a key="home" href="#" className="active">
+              Home
+            </a>,
+            <a key="about" href="#">
+              About
+            </a>,
+            <a key="services" href="#">
+              Services
+            </a>,
+            <a key="contact" href="#">
+              Contact
+            </a>,
+          ]}
+        />
+        <TodoListScreen />
+      </div>
+      <h1>{user?.email}</h1>
+    </>
+  )
+}
+
+
+10. Set Up React Router
+
+Install React Router
+
+npm i react-router
+Add BrowserRouter to the AppProviders.tsx
+
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import React from 'react'
+import {CustomErrorBoundary} from '../components/errorBoundary/CustomErrorBoundary'
+import {BrowserRouter} from 'react-router'
+
+export const AppProviders: React.FC<React.PropsWithChildren> = ({children}) => {
+  const queryClientRef = React.useRef<QueryClient | null>(null)
+  if (!queryClientRef.current) {
+    queryClientRef.current = new QueryClient({
+      defaultOptions: {
+        queries: {
+          refetchOnWindowFocus: false,
+        },
+      },
+    })
+  }
+
+  return (
+    <CustomErrorBoundary>
+      <QueryClientProvider client={queryClientRef.current}>
+        <BrowserRouter>{children}</BrowserRouter>
+      </QueryClientProvider>
+    </CustomErrorBoundary>
+  )
+}
+Create AppRoutes.tsx component in src/AppRoutes.tsx
+
+// file path: src/AppRoutes.tsx
+
+import {Navigate, Route, Routes} from 'react-router'
+import {TodoListScreen} from './screens/todoListScreen/TodoListScreen'
+
+export const AppRoutes: React.FC<React.PropsWithChildren> = () => {
+  return (
+    <Routes>
+      <Route path="/todos" element={<TodoListScreen />} />
+
+      <Route path="*" element={<Navigate to="/todos" replace />} />
+    </Routes>
+  )
+}
+
+Use ”<AppRoutes/>” component in the App.tsx 
+
+import {WuPrimaryNavbar} from '@npm-questionpro/wick-ui-lib'
+import './App.css'
+import {API_BASE_URL} from './constants/appConstants'
+import type {IServerResponse} from './types/IServerResponse'
+import type {IUser} from './types/IUser'
+import {useQuery, type UseQueryResult} from '@tanstack/react-query'
+import {AppRoutes} from './AppRoutes' // <-- 
+
+const fetchUser = async (): Promise<IServerResponse<IUser>> => {
+  return fetch(`${API_BASE_URL}user`, {
+    method: 'GET',
+    headers: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      'Content-Type': 'application/json',
+    },
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok')
+    }
+    return response.json() as Promise<IServerResponse<IUser>>
+  })
+}
+
+const useUserApi = (): UseQueryResult<IServerResponse<IUser>, Error> => {
+  return useQuery({
+    queryKey: ['user'],
+    queryFn: fetchUser,
+  })
+}
+
+export const App: React.FC = () => {
+  const {data, error, isLoading} = useUserApi()
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  if (error) {
+    console.error('Error fetching user:', error)
+    return <div>Error: {error?.message || 'Something went wrong'}</div>
+  }
+  const user = data?.data
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  return (
+    <>
+      <div>
+        <WuPrimaryNavbar
+          Links={[
+            <a key="home" href="#" className="active">
+              Home
+            </a>,
+            <a key="about" href="#">
+              About
+            </a>,
+            <a key="services" href="#">
+              Services
+            </a>,
+            <a key="contact" href="#">
+              Contact
+            </a>,
+          ]}
+        />
+        <AppRoutes /> // <----
+      </div>
+    </>
+  )
+}
+
+
